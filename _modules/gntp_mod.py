@@ -1,3 +1,6 @@
+import platform
+import salt
+
 try:
     import gntp.notifier
 except ImportError:
@@ -19,6 +22,16 @@ GROWL_MAPPING = {
     'password': ('gntp.password', None),
 }
 
+
+class _Notifier(gntp.notifier.GrowlNotifier):
+    def add_origin_info(self, packet):
+        """Add optional Origin headers to message"""
+        packet.add_header('Origin-Machine-Name', platform.node())
+        packet.add_header('Origin-Software-Name', 'salt')
+        packet.add_header('Origin-Software-Version', salt.__version__)
+        packet.add_header('Origin-Platform-Name', platform.system())
+        packet.add_header('Origin-Platform-Version', platform.platform())
+
 def _instance(**kwargs):
     for key in GROWL_MAPPING:
         if key not in kwargs:
@@ -26,7 +39,7 @@ def _instance(**kwargs):
             kwargs[key] = __salt__['config.get'](config, default)
 
     kwargs['notifications'] = ['Salt']
-    return gntp.notifier.GrowlNotifier(**kwargs)
+    return _Notifier(**kwargs)
 
 
 def register(application='salt', notifications=[]):
