@@ -2,7 +2,7 @@
 import pprint
 import logging
 import socket
-from fnmatch import fnmatch
+import fnmatch
 
 # Import Salt libs
 import salt.utils.event
@@ -17,11 +17,6 @@ __opts__ = {
     'sock_dir': '/var/run/salt/master',
 }
 
-GROWL_SETTINGS = {
-    'applicationName': 'Salt',
-    'notifications': ['Auth', 'Start', 'Job', 'Results', 'Other'],
-}
-
 TEMPLATE_RETURN = '''
 Function: {fun}
 Arguments: {fun_args}
@@ -31,30 +26,35 @@ Return: {return}
 '''.strip()
 
 
-class SaltGrowler(gntp.config.GrowlNotifier):
-    def add_origin_info(self, packet):
-        packet.add_header('Sent-By', socket.getfqdn())
+class _EventReader(object):
+    class SaltGrowler(gntp.config.GrowlNotifier):
+        def add_origin_info(self, packet):
+            packet.add_header('Sent-By', socket.getfqdn())
 
-
-class EventReader(object):
     def __init__(self):
+        self.config = {
+            'applicationName': 'Salt',
+            'notifications': ['Other'],
+        }
         self.event = salt.utils.event.SaltEvent(
             __opts__['node'],
             __opts__['sock_dir']
         )
         logger.info('Listening on %s', self.event.puburi)
 
-        self.growl = SaltGrowler(**GROWL_SETTINGS)
-        self.growl.register()
-
         self.events = {}
-        for obj in EventReader.__dict__.itervalues():
+        for obj in _EventReader.__dict__.itervalues():
             if hasattr(obj, 'event'):
                 self.events[obj.event] = obj
+                self.config['notifications'].append(obj.notification)
 
-    def register(event):
+        self.growl = self.SaltGrowler(**self.config)
+        self.growl.register()
+
+    def register(event, notification):
         def wrap(func):
             setattr(func, 'event', event)
+            setattr(func, 'notification', notification)
             return func
         return wrap
 
@@ -63,29 +63,28 @@ class EventReader(object):
             ret = self.event.get_event(full=True)
             if ret is None:
                 continue
-            # salt/auth is surprisingly noisy so for now we will
-            # skip over it
-            if ret['tag'] == 'salt/auth':
+            if ret['tag'].isdigit():
+                logger.debug('Skipping numeric tag: %s', ret['tag'])
                 continue
             for event, func in self.events.iteritems():
-                if fnmatch(ret['tag'], event):
-                    logger.info('Tag: %s', ret['tag'])
+                if fnmatch.fnmatch(ret['tag'], event):
+                    logger.debug('Tag: %s Notification: %s', ret['tag'], func.notification)
                     func(self, ret, identifier=ret['tag'])
                     break
             else:
                 logger.info('Unhandled tag: %s', ret['tag'])
                 logger.debug(pprint.pformat(ret))
 
-    @register('salt/minion/*/start')
+    @register('salt/minion/*/start', 'Start')
     def minion_start(self, ret, **kwargs):
         self.growl.notify(
             'Start',
             ret['tag'],
-            ret['data'],
+            ret['data']['data'],
             **kwargs
         )
 
-    @register('salt/job/*/new')
+    @register('salt/job/*/new', 'Job')
     def job_new(self, ret, **kwargs):
         self.growl.notify(
             'Job',
@@ -94,7 +93,11 @@ class EventReader(object):
             **kwargs
         )
 
-    @register('salt/job/*/ret/*')
+    @register('new_job', 'New Job')
+    def new_job(self, ret, **kwargs):
+        pass
+
+    @register('salt/job/*/ret/*', 'Results')
     def job_return(self, ret, **kwargs):
         kwargs['sticky'] = True
         self.growl.notify(
@@ -104,8 +107,11 @@ class EventReader(object):
             **kwargs
         )
 
-    @register('salt/auth')
+    @register('salt/auth', 'Auth')
     def salt_auth(self, ret, **kwargs):
+        # salt/auth is surprisingly noisy so for now we will
+        # skip over it for now
+        return
         self.growl.notify(
             'Auth',
             ret['tag'],
@@ -118,6 +124,9 @@ def __virtual__():
     return 'gntp'
 
 def watch():
+    '''Watch the salt event system and growl the results'''
+    # debug logging in the gntp library would make things too messy
+    # so we manually turn it off here
     logging.getLogger('gntp').setLevel(logging.INFO)
-    EventReader().dispatcher()
+    _EventReader().dispatcher()
 
