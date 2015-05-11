@@ -69,6 +69,7 @@ class EventReader(object):
                 continue
             for event, func in self.events.iteritems():
                 if fnmatch(ret['tag'], event):
+                    logger.info('Tag: %s', ret['tag'])
                     func(self, ret, identifier=ret['tag'])
                     break
             else:
@@ -111,6 +112,10 @@ class EventReader(object):
             pprint.pformat(ret['data']),
             **kwargs
         )
+
+__virtualname__ = 'gntp'
+def __virtual__():
+    return 'gntp'
 
 def watch():
     logging.getLogger('gntp').setLevel(logging.INFO)
