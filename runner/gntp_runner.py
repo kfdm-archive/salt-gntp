@@ -17,6 +17,8 @@ __opts__ = {
     'sock_dir': '/var/run/salt/master',
 }
 
+SALT_ICON = 'https://avatars.githubusercontent.com/u/1147473'
+
 TEMPLATE_RETURN = '''
 Function: {fun}
 Arguments: {fun_args}
@@ -35,6 +37,7 @@ class _EventReader(object):
         self.config = {
             'applicationName': 'Salt',
             'notifications': ['Other'],
+            'applicationIcon': SALT_ICON,
         }
         self.event = salt.utils.event.SaltEvent(
             __opts__['node'],
