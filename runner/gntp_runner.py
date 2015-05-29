@@ -1,3 +1,11 @@
+'''
+Custom event listener to send growl events
+
+Example Config Options:
+# Assume using something like saltpad
+gntp.url: 'http://salt/job_result/{jid}'
+'''
+
 # Import Python libs
 import pprint
 import logging
@@ -103,6 +111,8 @@ class _EventReader(object):
     @register('salt/job/*/ret/*', 'Results')
     def job_return(self, ret, **kwargs):
         kwargs['sticky'] = True
+        if 'gntp.url' in __opts__:
+            kwargs['callback'] = __opts__['gntp.url'].format(**ret['data']) 
         self.growl.notify(
             'Results',
             ret['tag'],
