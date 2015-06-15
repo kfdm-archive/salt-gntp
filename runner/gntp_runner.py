@@ -74,7 +74,7 @@ class _EventReader(object):
             template = self.templates[template]
         else:
             template = self.templates['default.tmpl']
-        logger.warning('Rendering template: %s', template)
+        logger.debug('Rendering template: %s', template)
         return template.format(**data)
 
     def dispatcher(self):
