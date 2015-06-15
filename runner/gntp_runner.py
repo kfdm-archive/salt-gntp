@@ -7,10 +7,11 @@ gntp.url: 'http://salt/job_result/{jid}'
 '''
 
 # Import Python libs
-import pprint
-import logging
-import socket
 import fnmatch
+import logging
+import os
+import pprint
+import socket
 
 # Import Salt libs
 import salt.utils.event
@@ -23,17 +24,10 @@ logger = logging.getLogger(__name__)
 __opts__ = {
     'node': 'master',
     'sock_dir': '/var/run/salt/master',
+    'growl_templates': os.path.join(os.path.dirname(__file__), 'templates'),
 }
 
-SALT_ICON = 'https://avatars.githubusercontent.com/u/1147473'
-
-TEMPLATE_RETURN = '''
-Function: {fun}
-Arguments: {fun_args}
-ID: {id}
-JID: {jid}
-Return: {return}
-'''.strip()
+SALT_ICON = 'http://github.com/saltstack.png'
 
 
 class _EventReader(object):
@@ -62,12 +56,26 @@ class _EventReader(object):
         self.growl = self.SaltGrowler(**self.config)
         self.growl.register()
 
+        self.templates = {}
+        for fn in os.listdir(__opts__['growl_templates']):
+            with open(os.path.join(__opts__['growl_templates'], fn)) as fp:
+                logger.info('Reading template %s', fp.name)
+                self.templates[fn] = fp.read().strip()
+
     def register(event, notification):
         def wrap(func):
             setattr(func, 'event', event)
             setattr(func, 'notification', notification)
             return func
         return wrap
+
+    def render(self, template, data):
+        if template in self.templates:
+            template = self.templates[template]
+        else:
+            template = self.templates['default.tmpl']
+        logger.warning('Rendering template: %s', template)
+        return template.format(**data)
 
     def dispatcher(self):
         while True:
@@ -116,7 +124,7 @@ class _EventReader(object):
         self.growl.notify(
             'Results',
             ret['tag'],
-            TEMPLATE_RETURN.format(**ret['data']),
+            self.render(ret['data'].get('out', 'default') + '.tmpl', ret['data']),
             **kwargs
         )
 
