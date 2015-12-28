@@ -5,6 +5,7 @@ After=network.target
 [Service]
 Type=simple
 ExecStart=/usr/bin/salt-run -l debug gntp.watch
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
