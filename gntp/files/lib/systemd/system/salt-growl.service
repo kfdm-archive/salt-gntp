@@ -1,0 +1,10 @@
+[Unit]
+Description=Salt Growler
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/salt-run -l debug gntp.watch
+
+[Install]
+WantedBy=multi-user.target
